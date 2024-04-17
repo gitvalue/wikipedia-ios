@@ -5,6 +5,7 @@
 @import MobileCoreServices;
 
 NSString *const WMFNavigateToActivityNotification = @"WMFNavigateToActivityNotification";
+NSString *const WMFCoordinatesKey = @"WMFCoordinates";
 
 // Use to suppress "User-facing text should use localized string macro" Analyzer warning
 // where appropriate.
@@ -62,14 +63,24 @@ __attribute__((annotate("returns_localized_nsstring"))) static inline NSString *
 + (instancetype)wmf_placesActivityWithURL:(NSURL *)activityURL {
     NSURLComponents *components = [NSURLComponents componentsWithURL:activityURL resolvingAgainstBaseURL:NO];
     NSURL *articleURL = nil;
+    NSString *coordinates = nil;
     for (NSURLQueryItem *item in components.queryItems) {
         if ([item.name isEqualToString:@"WMFArticleURL"]) {
             NSString *articleURLString = item.value;
             articleURL = [NSURL URLWithString:articleURLString];
             break;
         }
+        if ([item.name isEqualToString:WMFCoordinatesKey]) {
+            coordinates = item.value;
+            break;
+        }
     }
     NSUserActivity *activity = [self wmf_pageActivityWithName:@"Places"];
+    if (coordinates) {
+        NSMutableDictionary *userInfo = activity.userInfo.mutableCopy;
+        [userInfo setValue:coordinates forKey:WMFCoordinatesKey];
+        activity.userInfo = userInfo;
+    }
     activity.webpageURL = articleURL;
     return activity;
 }
@@ -261,6 +272,20 @@ __attribute__((annotate("returns_localized_nsstring"))) static inline NSString *
         return [NSURL URLWithString:self.userInfo[CSSearchableItemActivityIdentifier]];
     } else {
         return self.webpageURL;
+    }
+}
+
+- (CLLocation *)wmf_coordinates {
+    if (self.userInfo[WMFCoordinatesKey]) {
+        NSString *coordinatesString = self.userInfo[WMFCoordinatesKey];
+        NSArray<NSString *> *components = [coordinatesString componentsSeparatedByString:@","];
+        if (1 < components.count) {
+            return [[CLLocation alloc] initWithLatitude:components[0].doubleValue longitude:components[1].doubleValue];
+        } else {
+            return nil;
+        }
+    } else {
+        return nil;
     }
 }
 
